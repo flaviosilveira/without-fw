@@ -6,9 +6,12 @@ use App\HelloWorld;
 use FastRoute\RouteCollector;
 use Middlewares\FastRoute;
 use Middlewares\RequestHandler;
+use Narrowspark\HttpEmitter\SapiEmitter;
 use Relay\Relay;
+use Zend\Diactoros\Response;
 use Zend\Diactoros\ServerRequestFactory;
 use function DI\create;
+use function DI\get;
 use function FastRoute\simpleDispatcher;
 
 // Autoload
@@ -20,6 +23,11 @@ $containerBuilder->useAutowiring(false);
 $containerBuilder->useAnnotations(false);
 $containerBuilder->addDefinitions([
     HelloWorld::class => create(HelloWorld::class)
+        ->constructor(get('Foo'), get('Response')),
+        'Foo' => 'bar',
+        'Response' => function(){
+            return new Response();
+        }
 ]);
 $container = $containerBuilder->build();
 
@@ -29,11 +37,10 @@ $routes = simpleDispatcher(function (RouteCollector $r) {
 });
 
 $middlewareQueue[] = new FastRoute($routes);
-$middlewareQueue[] = new RequestHandler();
+$middlewareQueue[] = new RequestHandler($container);
 
 $requestHandler = new Relay($middlewareQueue);
-$requestHandler->handle(ServerRequestFactory::fromGlobals());
+$response = $requestHandler->handle(ServerRequestFactory::fromGlobals());
 
-// App
-//$helloWorld = $container->get(HelloWorld::class);
-//$helloWorld->announce();
+$emitter = new SapiEmitter();
+return $emitter->emit($response);
